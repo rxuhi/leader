@@ -175,4 +175,29 @@ async def update_role_tickets(user_id: int, guild_id: int, amount: int):
         """, (user_id, guild_id, max(0, amount), amount))
         await db.commit()
 
-
+async def init_db():
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER NOT NULL,
+                guild_id INTEGER NOT NULL,
+                exp INTEGER DEFAULT 0,
+                gacha_points INTEGER DEFAULT 0,
+                role_tickets INTEGER DEFAULT 0,
+                PRIMARY KEY(user_id, guild_id)
+            );
+            CREATE TABLE IF NOT EXISTS purchased_roles (
+                user_id INTEGER,
+                guild_id INTEGER,
+                role_id INTEGER,
+                price_paid INTEGER,
+                purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, guild_id, role_id)
+            );
+        """)
+        # 이미 DB가 만들어진 상태에서도 role_tickets 컬럼 추가되게 처리
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN role_tickets INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
+        await db.commit()
