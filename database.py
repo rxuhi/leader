@@ -165,3 +165,14 @@ async def init_db():
 
         await db.commit()
 
+async def update_role_tickets(user_id: int, guild_id: int, amount: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT INTO users (user_id, guild_id, role_tickets)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id, guild_id)
+            DO UPDATE SET role_tickets = role_tickets + ?
+        """, (user_id, guild_id, max(0, amount), amount))
+        await db.commit()
+
+
