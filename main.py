@@ -21,6 +21,7 @@ async def on_ready():
     await bot.load_extension("cogs.points")
     await bot.load_extension("cogs.roles")
     await bot.load_extension("cogs.gacha")
+    await bot.load_extension("cogs.role_ticket")
     
     # 슬래시 명령어 동기화
     await bot.tree.sync()
