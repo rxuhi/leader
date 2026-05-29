@@ -18,6 +18,11 @@ class PointsCog(commands.Cog):
         )
         embed.add_field(name="가챠 포인트", value=f"**{user['gacha_points']:,}** P")
         embed.add_field(name="경험치", value=f"**{user['exp']:,}** EXP")
+        embed.add_field(
+            name="역할 선택권",
+            value=f"**{user.get('role_tickets', 0):,}개**",
+            inline=True
+        )
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
         await interaction.response.send_message(embed=embed)
     
