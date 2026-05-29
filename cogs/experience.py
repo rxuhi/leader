@@ -53,13 +53,29 @@ class ExperienceCog(commands.Cog):
     @app_commands.command(name="경험치", description="내 경험치를 확인합니다")
     async def check_exp(self, interaction: discord.Interaction):
         user = await get_user(interaction.user.id, interaction.guild.id)
+        
         embed = discord.Embed(
             title="💫 경험치 현황",
             color=discord.Color.blue()
         )
-        embed.add_field(name="보유 경험치", value=f"**{user['exp']:,}** EXP")
-        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        embed.add_field(
+            name="보유 경험치",
+            value=f"**{user['exp']:,}** EXP",
+            inline=True
+        )
+        
+        embed.add_field(
+            name="역할 선택권",
+            value=f"**{user.get('role_tickets', 0):,}개**",
+            inline=True
+        )
+       
+        embed.set_author(
+            name=interaction.user.display_name,
+            icon_url=interaction.user.display_avatar.url
+        )
         await interaction.response.send_message(embed=embed)
+
     
     # 경험치 순위
     @app_commands.command(name="경험치순위", description="서버 경험치 순위를 확인합니다")
@@ -85,3 +101,6 @@ class ExperienceCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(ExperienceCog(bot))
+
+
+
