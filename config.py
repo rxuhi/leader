@@ -1,5 +1,5 @@
 # 설정값
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = os.getenv("TOKEN1")
 
 # 경험치 설정
 EXP_PER_VOICE_INTERVAL = 100  # 음성 5분당
