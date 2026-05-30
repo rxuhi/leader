@@ -7,11 +7,117 @@ import aiosqlite
 from database import DB_PATH, get_user, update_gacha
 from config import MAX_5050_BET
 
-class GachaCog(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+class ShellGameView(discord.ui.View):
+    def __init__(self, user_id, guild_id, amount, update_gacha):
+        super().__init__(timeout=20)
+        self.user_id = user_id
+        self.guild_id = guild_id
+        self.amount = amount
+        self.answer = random.randint(1, 3)
+        self.update_gacha = update_gacha
+
+    async def pick(self, interaction: discord.Interaction, cup: int):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message(
+                "❌ 본인 게임만 플레이 가능합니다.",
+                ephemeral=True
+            )
+            return
+
+        for child in self.children:
+            child.disabled = True
+
+        cups = ["🥤", "🥤", "🥤"]
+        cups[self.answer - 1] = "⚽"
+
+        if cup == self.answer:
+            reward = self.amount * 3
+            await self.update_gacha(self.user_id, self.guild_id, reward)
+
+            embed = discord.Embed(
+                title="🎯 야바위 성공!",
+                description=f"{' '.join(cups)}\n\n+{reward:,} P",
+                color=discord.Color.green()
+            )
+        else:
+            await self.update_gacha(self.user_id, self.guild_id, -self.amount)
+
+            embed = discord.Embed(
+                title="💸 야바위 실패!",
+                description=f"{' '.join(cups)}\n\n-{self.amount:,} P",
+                color=discord.Color.red()
+            )
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="1번 컵")
+    async def cup1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.pick(interaction, 1)
+
+    @discord.ui.button(label="2번 컵")
+    async def cup2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.pick(interaction, 2)
+
+    @discord.ui.button(label="3번 컵")
+    async def cup3(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.pick(interaction, 3)
+
+
+class CasinoCog(commands.Cog):
+    def __init__(self, bot):
         self.bot = bot
-        self.active_races = {}  # {channel_id: race_data}
-        self.active_pools = {}  # {channel_id: pool_data}
+        self.active_races = {}
+        self.active_pools = {}
+
+    @app_commands.command(name="야바위", description="컵 속 공 찾기")
+    async def shell_game(self, interaction: discord.Interaction, 배팅: int):
+
+        from database import get_user, update_gacha
+
+        user = await get_user(interaction.user.id, interaction.guild.id)
+
+        if user["gacha_points"] < 배팅:
+            await interaction.response.send_message(
+                "❌ 포인트 부족",
+                ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            "🎲 컵을 섞는 중..."
+        )
+
+        msg = await interaction.original_response()
+
+        cups = ["🥤", "🥤", "⚽"]
+
+        for _ in range(10):
+            random.shuffle(cups)
+
+            embed = discord.Embed(
+                title="🎲 컵 섞는 중...",
+                description=" ".join(cups),
+                color=discord.Color.blurple()
+            )
+
+            await msg.edit(embed=embed)
+            await asyncio.sleep(0.5)
+
+        embed = discord.Embed(
+            title="🎯 공은 어디에 있을까요?",
+            description="🥤 🥤 🥤",
+            color=discord.Color.gold()
+        )
+
+        await msg.edit(
+            embed=embed,
+            view=ShellGameView(
+                interaction.user.id,
+                interaction.guild.id,
+                배팅,
+                update_gacha
+            )
+        )
     
     # ========== 홀짝 ==========
     @app_commands.command(name="홀짝", description="홀짝 게임 (1/2 확률)")
@@ -170,46 +276,6 @@ class GachaCog(commands.Cog):
             embed = discord.Embed(
                 title="✊ 가위바위보 - 패배",
                 description=f"당신: {emojis[선택]} vs 봇: {emojis[bot_choice]}\n**-{배팅:,}** P",
-                color=discord.Color.red()
-            )
-        
-        await interaction.response.send_message(embed=embed)
-    
-    # ========== 야바위 ==========
-    @app_commands.command(name="야바위", description="3개의 컵 중 공이 있는 컵 맞추기 (1/3 확률)")
-    @app_commands.describe(선택="1, 2, 3 중 선택", 배팅="배팅할 포인트")
-    @app_commands.choices(선택=[
-        app_commands.Choice(name="1번 컵", value=1),
-        app_commands.Choice(name="2번 컵", value=2),
-        app_commands.Choice(name="3번 컵", value=3)
-    ])
-    async def shell_game(self, interaction: discord.Interaction, 선택: int, 배팅: int):
-        if 배팅 <= 0:
-            await interaction.response.send_message("❌ 1 이상 배팅하세요.", ephemeral=True)
-            return
-        
-        user = await get_user(interaction.user.id, interaction.guild.id)
-        if user['gacha_points'] < 배팅:
-            await interaction.response.send_message("❌ 포인트가 부족합니다.", ephemeral=True)
-            return
-        
-        answer = random.randint(1, 3)
-        cups = ["🥤", "🥤", "🥤"]
-        cups[answer - 1] = "⚽"
-        
-        if 선택 == answer:
-            winnings = 배팅 * 2  # 1/3 확률이므로 2배
-            await update_gacha(interaction.user.id, interaction.guild.id, winnings)
-            embed = discord.Embed(
-                title="🎯 야바위 - 정답!",
-                description=f"{' '.join(cups)}\n공은 **{answer}번** 컵에!\n**+{winnings:,}** P 획득!",
-                color=discord.Color.green()
-            )
-        else:
-            await update_gacha(interaction.user.id, interaction.guild.id, -배팅)
-            embed = discord.Embed(
-                title="💨 야바위 - 오답",
-                description=f"{' '.join(cups)}\n공은 **{answer}번** 컵에 있었습니다\n**-{배팅:,}** P",
                 color=discord.Color.red()
             )
         
@@ -471,53 +537,7 @@ class GachaCog(commands.Cog):
         
         await channel.send(embed=embed)
     
-    # ========== 포커 (간단 버전) ==========
-    @app_commands.command(name="포커", description="간단 포커 - 높은 카드가 이기면 승리")
-    @app_commands.describe(배팅="배팅할 포인트")
-    async def simple_poker(self, interaction: discord.Interaction, 배팅: int):
-        if 배팅 <= 0:
-            await interaction.response.send_message("❌ 1 이상 배팅하세요.", ephemeral=True)
-            return
-        
-        user = await get_user(interaction.user.id, interaction.guild.id)
-        if user['gacha_points'] < 배팅:
-            await interaction.response.send_message("❌ 포인트가 부족합니다.", ephemeral=True)
-            return
-        
-        # 간단하게 카드 숫자 비교
-        cards = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
-        suits = ["♠️", "♥️", "♦️", "♣️"]
-        
-        player_card = random.randint(0, 12)
-        bot_card = random.randint(0, 12)
-        player_suit = random.choice(suits)
-        bot_suit = random.choice(suits)
-        
-        player_display = f"{player_suit}{cards[player_card]}"
-        bot_display = f"{bot_suit}{cards[bot_card]}"
-        
-        if player_card > bot_card:
-            await update_gacha(interaction.user.id, interaction.guild.id, 배팅)
-            embed = discord.Embed(
-                title="🃏 포커 - 승리!",
-                description=f"당신: **{player_display}** vs 딜러: **{bot_display}**\n**+{배팅:,}** P",
-                color=discord.Color.green()
-            )
-        elif player_card < bot_card:
-            await update_gacha(interaction.user.id, interaction.guild.id, -배팅)
-            embed = discord.Embed(
-                title="🃏 포커 - 패배",
-                description=f"당신: **{player_display}** vs 딜러: **{bot_display}**\n**-{배팅:,}** P",
-                color=discord.Color.red()
-            )
-        else:
-            embed = discord.Embed(
-                title="🃏 포커 - 무승부",
-                description=f"당신: **{player_display}** vs 딜러: **{bot_display}**\n포인트 변동 없음",
-                color=discord.Color.yellow()
-            )
-        
-        await interaction.response.send_message(embed=embed)
+
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(GachaCog(bot))
+    await bot.add_cog(CasinoCog(bot))
