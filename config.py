@@ -1,3 +1,5 @@
+import os
+
 # 설정값
 BOT_TOKEN = os.getenv("TOKEN1")
 
