@@ -321,7 +321,7 @@ class CasinoCog(commands.Cog):
     async def spin_wheel(self, interaction: discord.Interaction, 배팅: int):
         if 배팅 <= 0 or 배팅 > MAX_5050_BET:
             await interaction.response.send_message(
-                f"❌ 1~{MAX_50500_BET} 사이로 배팅하세요.",
+                f"❌ 1~{MAX_5050_BET} 사이로 배팅하세요.",
                 ephemeral=True
             )
             return
