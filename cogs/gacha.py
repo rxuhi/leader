@@ -15,6 +15,19 @@ class ShellGameView(discord.ui.View):
         self.amount = amount
         self.answer = random.randint(1, 3)
         self.update_gacha = update_gacha
+        self.message = None
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+        try:
+            await self.message.edit(
+                content="⏰ 시간이 초과되었습니다.",
+                view=self
+            )
+        except:
+            pass
 
     async def pick(self, interaction: discord.Interaction, cup: int):
         if interaction.user.id != self.user_id:
@@ -31,24 +44,29 @@ class ShellGameView(discord.ui.View):
         cups[self.answer - 1] = "⚽"
 
         if cup == self.answer:
-            reward = self.amount * 3
-            await self.update_gacha(self.user_id, self.guild_id, reward)
+            reward = self.amount * 2
+            await self.update_gacha(
+                self.user_id,
+                self.guild_id,
+                reward
+            )
 
             embed = discord.Embed(
                 title="🎯 야바위 성공!",
-                description=f"{' '.join(cups)}\n\n+{reward:,} P",
+                description=f"{' '.join(cups)}\n\n+{self.amount:,} P",
                 color=discord.Color.green()
             )
         else:
-            await self.update_gacha(self.user_id, self.guild_id, -self.amount)
-
             embed = discord.Embed(
                 title="💸 야바위 실패!",
                 description=f"{' '.join(cups)}\n\n-{self.amount:,} P",
                 color=discord.Color.red()
             )
 
-        await interaction.response.edit_message(embed=embed, view=self)
+        await interaction.response.edit_message(
+            embed=embed,
+            view=self
+        )
 
     @discord.ui.button(label="1번 컵")
     async def cup1(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -72,16 +90,29 @@ class CasinoCog(commands.Cog):
     @app_commands.command(name="야바위", description="컵 속 공 찾기")
     async def shell_game(self, interaction: discord.Interaction, 배팅: int):
 
+        if 배팅 <= 0 or 배팅 > MAX_5050_BET:
+            await interaction.response.send_message(
+                f"❌ 1~{MAX_5050_BET} 사이로 배팅하세요.",
+                ephemeral=True
+            )
+            return
+
         from database import get_user, update_gacha
 
         user = await get_user(interaction.user.id, interaction.guild.id)
-
+        
         if user["gacha_points"] < 배팅:
             await interaction.response.send_message(
                 "❌ 포인트 부족",
                 ephemeral=True
             )
             return
+            
+        await update_gacha(
+            interaction.user.id,
+            interaction.guild.id,
+            -배팅
+        )
 
         await interaction.response.send_message(
             "🎲 컵을 섞는 중..."
@@ -109,15 +140,18 @@ class CasinoCog(commands.Cog):
             color=discord.Color.gold()
         )
 
+        view = ShellGameView(
+            interaction.user.id,
+            interaction.guild.id,
+            배팅,
+            update_gacha
+        )
         await msg.edit(
             embed=embed,
-            view=ShellGameView(
-                interaction.user.id,
-                interaction.guild.id,
-                배팅,
-                update_gacha
-            )
+            view=view
         )
+        
+        view.message = msg
     
     # ========== 홀짝 ==========
     @app_commands.command(name="홀짝", description="홀짝 게임 (1/2 확률)")
@@ -285,8 +319,11 @@ class CasinoCog(commands.Cog):
     @app_commands.command(name="돌림판", description="돌림판 돌리기")
     @app_commands.describe(배팅="배팅할 포인트")
     async def spin_wheel(self, interaction: discord.Interaction, 배팅: int):
-        if 배팅 <= 0:
-            await interaction.response.send_message("❌ 1 이상 배팅하세요.", ephemeral=True)
+        if 배팅 <= 0 or 배팅 > MAX_5050_BET:
+            await interaction.response.send_message(
+                f"❌ 1~{MAX_50500_BET} 사이로 배팅하세요.",
+                ephemeral=True
+            )
             return
         
         user = await get_user(interaction.user.id, interaction.guild.id)
@@ -317,8 +354,18 @@ class CasinoCog(commands.Cog):
             result_text = "🌟 10배! 🌟"
         
         change = (배팅 * multiplier) - 배팅
-        await update_gacha(interaction.user.id, interaction.guild.id, change)
+        await update_gacha(
+            interaction.user.id,
+            interaction.guild.id,
+            -배팅
+        )
+        reward = 배팅 * multiplier
         
+        await update_gacha(
+            interaction.user.id,
+            interaction.guild.id,
+            reward
+        )
         if multiplier == 0:
             embed = discord.Embed(
                 title="🎡 돌림판 - 꽝!",
@@ -364,8 +411,13 @@ class CasinoCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
         
         # 30초 후 레이스 진행
+        asyncio.create_task(
+            self.run_race_after_delay(interaction.channel)
+        )
+        
+    async def run_race_after_delay(self, channel):
         await asyncio.sleep(30)
-        await self.run_race(interaction.channel)
+        await self.run_race(channel)
     
     @app_commands.command(name="경마배팅", description="경마에 배팅합니다")
     @app_commands.describe(말번호="1~5번 중 선택", 배팅="배팅할 포인트")
@@ -435,7 +487,7 @@ class CasinoCog(commands.Cog):
             name = member.display_name if member else f"유저 {user_id}"
             
             if horse == winner:
-                winnings = amount * 5
+                winnings = amount * 3
                 await update_gacha(user_id, channel.guild.id, winnings)
                 winners_text += f"🎉 {name}: +{winnings:,} P\n"
             else:
@@ -468,8 +520,13 @@ class CasinoCog(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
         
+        asyncio.create_task(
+            self.run_pool_after_delay(interaction.channel)
+        )
+
+    async def run_pool_after_delay(self, channel):
         await asyncio.sleep(30)
-        await self.run_pool(interaction.channel)
+        await self.run_pool(channel)
     
     @app_commands.command(name="몰아주기참여", description="몰아주기에 참여합니다 (최대 500P)")
     @app_commands.describe(배팅="배팅할 포인트 (최대 500)")
@@ -539,5 +596,5 @@ class CasinoCog(commands.Cog):
     
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot):
     await bot.add_cog(CasinoCog(bot))
