@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-from config import ROLE_TICKET_PRICE, ROLE_TICKET_ROLES
+from config import ROLE_TICKET_ROLES
 from database import get_user, update_exp, update_role_tickets
 
 
