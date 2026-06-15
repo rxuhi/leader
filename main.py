@@ -23,11 +23,10 @@ async def on_ready():
     await bot.load_extension("cogs.gacha")
     await bot.load_extension("cogs.role_ticket")
     
-    # 슬래시 명령어 동기화
-synced = await bot.tree.sync()
-print(f"동기화된 명령어 수: {len(synced)}")
-for cmd in synced:
-    print(cmd.name)
+    synced = await bot.tree.sync()
+    print(f"동기화된 명령어 수: {len(synced)}")
+    for cmd in synced:
+        print(cmd.name)
 
 if __name__ == "__main__":
     bot.run(BOT_TOKEN)
